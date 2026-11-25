@@ -1,0 +1,102 @@
+16:export const MAX_RETRIES = 1;
+== 变异 A：MAX_RETRIES 2 → 1（GET 5xx 重试次数改少） ==
+PASS __tests__/error-codes.test.ts (8.8 s)
+PASS __tests__/upload.test.ts (9.916 s)
+FAIL __tests__/request.test.ts (9.987 s)
+  ● request() › AC1 GET 遇 5xx 重试 2 次（共 3 次请求，退避 500ms、1500ms）
+
+    ApiError: 网关异常
+
+      149 |         throw new ApiError(code, message, requestId);
+      150 |       }
+    > 151 |       throw new ApiError(statusCode, message, requestId);
+          |             ^
+      152 |     } catch (err) {
+      153 |       if (!(err instanceof ApiError)) {
+      154 |         throw err;
+
+      at request (services/request.ts:151:13)
+      at Object.<anonymous> (__tests__/request.test.ts:99:20)
+
+  ● request() › AC1 GET 遇网络错误重试 2 次后成功
+
+    ApiError: 网络断开，请检查网络后重试。
+
+      119 |           reject(new ApiError('TIMEOUT', getErrorMessage('TIMEOUT'), requestId));
+      120 |         } else {
+    > 121 |           reject(new ApiError('NETWORK', getErrorMessage('NETWORK'), requestId));
+          |                  ^
+      122 |         }
+      123 |       },
+      124 |     });
+
+      at Object.fail (services/request.ts:121:18)
+      at Object.request (__tests__/wx-mock.ts:63:20)
+      at services/request.ts:105:8
+      at wxRequestOnce (services/request.ts:104:10)
+      at request (services/request.ts:137:42)
+      at Object.<anonymous> (__tests__/request.test.ts:109:20)
+
+Test Suites: 1 failed, 2 passed, 3 total
+Tests:       2 failed, 22 passed, 24 total
+Snapshots:   0 total
+Time:        11.063 s
+Ran all test suites.
+变异 A：MAX_RETRIES 2 → 1（GET 5xx 重试次数改少） 退出码：1
+
+159:        if (false) { // 变异：401 不重放
+== 变异 B：401 重放去掉（第一次 401 后直接清登录态） ==
+PASS __tests__/error-codes.test.ts (8.168 s)
+PASS __tests__/upload.test.ts (9.325 s)
+FAIL __tests__/request.test.ts (9.602 s)
+  ● request() › AC1 401 重放一次：第一次 401 → relogin → 重放成功
+
+    ApiError: 登录已过期
+
+      141 |
+      142 |       if (statusCode === 401) {
+    > 143 |         throw new ApiError(401, message, requestId);
+          |               ^
+      144 |       }
+      145 |       if (statusCode >= 200 && statusCode < 300 && code === 0) {
+      146 |         return body ? (body.data as T) : (undefined as unknown as T);
+
+      at request (services/request.ts:143:15)
+      at Object.<anonymous> (__tests__/request.test.ts:74:20)
+
+  ● request() › AC1 401 第二次仍 401：清登录态并回首页
+
+    expect(jest.fn()).toHaveBeenCalledTimes(expected)
+
+    Expected number of calls: 1
+    Received number of calls: 0
+
+      86 |     enqueueRequest({ type: 'success', statusCode: 401, data: { code: 401, message: '登录已过期', data: null } });
+      87 |     await expect(request({ url: '/spaces' })).rejects.toMatchObject({ code: 401 });
+    > 88 |     expect(reloginSpy).toHaveBeenCalledTimes(1);
+         |                        ^
+      89 |     expect(clearSpy).toHaveBeenCalledTimes(1);
+      90 |     expect(goHomeSpy).toHaveBeenCalledTimes(1);
+      91 |     expect(auth.getToken()).toBeNull();
+
+      at Object.<anonymous> (__tests__/request.test.ts:88:24)
+
+Test Suites: 1 failed, 2 passed, 3 total
+Tests:       2 failed, 22 passed, 24 total
+Snapshots:   0 total
+Time:        10.733 s
+Ran all test suites.
+变异 B：401 重放去掉（第一次 401 后直接清登录态） 退出码：1
+
+== 还原后全套测试（必须绿）==
+PASS __tests__/request.test.ts (6.924 s)
+PASS __tests__/upload.test.ts (7.224 s)
+PASS __tests__/error-codes.test.ts (7.205 s)
+
+Test Suites: 3 passed, 3 total
+Tests:       24 passed, 24 total
+Snapshots:   0 total
+Time:        8.716 s, estimated 9 s
+Ran all test suites.
+还原后退出码：0
+== 变异自证通过：两处变异均变红，还原后全绿 ==
