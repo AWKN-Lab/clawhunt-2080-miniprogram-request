@@ -13,7 +13,7 @@
 | `constants/error-codes.ts` | 错误码 → 中文提示映射表（17 条） |
 | `config/env.ts` | 按 envVersion（develop / trial / release）取 baseURL |
 | `types/wx.d.ts` | wx 全局对象最小类型声明 |
-| `__tests__/` | Jest 单元测试（32 项）与 wx mock |
+| `__tests__/` | Jest 单元测试（33 项）与 wx mock |
 
 ## 快速开始
 
@@ -60,7 +60,7 @@ const result = await upload<{ url: string}>('wxfile://tmp_abc.png', 'avatar');
 - 每次请求自动附加 `Authorization: Bearer <token>`（未登录时不附加）与 `X-Request-Id`（UUID v4，每次请求不同）。`X-Request-Id` 由库自动生成，调用方传入同名 header 也会被覆盖，保证每次请求唯一追踪 ID 不可被调用方改写。
 - 响应体统一按 `{ code, message, data}` 解析：`code=0` 返回 `data`，否则抛 `ApiError`。
 - HTTP 401：调登录模块 `relogin()` 后重放原请求一次；第二次仍 401 则清除登录态并回到首页。
-- 网络错误与 5xx：仅 GET 最多重试 2 次，退避 500ms、1500ms；POST / PUT / DELETE 不重试。重试决策只看 HTTP 状态码与网络错误，业务 code 不参与：HTTP 200 即使业务码为 500 也不重试；HTTP 503 即使业务码为 0 或字符串也重试。
+- 网络错误与 5xx：仅 GET 最多重试 2 次，退避 500ms、1500ms；POST / PUT / DELETE 不重试。重试决策只看 HTTP 状态码与无 statusCode 的网络错误，业务 code 不参与：HTTP 200 即使业务码为 500 或 'NETWORK' 也不重试（网络错误须无 statusCode 才重试）；HTTP 503 即使业务码为 0 或字符串也重试 2 次。
 - 默认超时 10s（`timeout` 可覆盖），超时抛 `code=TIMEOUT` 的 `ApiError`。
 - 出错时默认自动 `wx.showToast` 中文提示；`silent: true` 时不自动提示。
 

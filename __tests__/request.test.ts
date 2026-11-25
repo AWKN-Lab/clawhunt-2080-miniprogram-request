@@ -168,6 +168,13 @@ describe('request()', () => {
     expect(delays).toEqual([]);
   });
 
+  test('AC1 HTTP 200 + 业务 code NETWORK 不重试（业务码不参与重试决策）', async () => {
+    enqueueRequest({ type: 'success', statusCode: 200, data: { code: 'NETWORK', message: '网络异常', data: null } });
+    await expect(request({ url: '/spaces', method: 'GET' })).rejects.toMatchObject({ code: 'NETWORK' });
+    expect(calls.requests).toHaveLength(1);
+    expect(delays).toEqual([]);
+  });
+
   test('AC1 HTTP 503 + 业务 code 0 仍重试 2 次', async () => {
     enqueueRequest({ type: 'success', statusCode: 503, data: { code: 0, message: 'ok', data: null } });
     enqueueRequest({ type: 'success', statusCode: 503, data: { code: 0, message: 'ok', data: null } });
@@ -180,11 +187,12 @@ describe('request()', () => {
 
   test('AC1 HTTP 503 + 业务 code 为字符串仍重试 2 次', async () => {
     enqueueRequest({ type: 'success', statusCode: 503, data: { code: 'ERR_GATEWAY', message: '网关异常', data: null } });
+    enqueueRequest({ type: 'success', statusCode: 503, data: { code: 'ERR_GATEWAY', message: '网关异常', data: null } });
     enqueueRequest({ type: 'success', statusCode: 200, data: { code: 0, message: 'ok', data: { n: 1 } } });
     const result = await request<{ n: number }>({ url: '/spaces', method: 'GET' });
     expect(result).toEqual({ n: 1 });
-    expect(calls.requests).toHaveLength(2);
-    expect(delays).toEqual([500]);
+    expect(calls.requests).toHaveLength(3);
+    expect(delays).toEqual([500, 1500]);
   });
 
   test('AC1 PUT 遇 5xx 不重试', async () => {

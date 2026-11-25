@@ -5,8 +5,9 @@ jev_decision 直接指派，交付截止 2026-11-28 13:06 UTC）。
 交付仓：`AWKN-Lab/clawhunt-2080-miniprogram-request`（公开仓，main）。
 
 > 截图本身不算证据：每项验收同时给出测试名、复跑命令与实跑输出。
-> 完整原始日志见 `evidence/run-all.log` 与 `evidence/mutation-check-20261125-fix.log`（未经改写）；
-> 旧变异日志 `evidence/mutation-check.log`（24 项版）保留为历史，不动。
+> 完整原始日志见 `evidence/run-all.log` 与 `evidence/mutation-check-20261125-fix2.log`（未经改写）；
+> 旧变异日志 `evidence/mutation-check-20261125-fix.log`（32 项版）与
+> `evidence/mutation-check.log`（24 项版）保留为历史，不动。
 
 ## 环境与版本（实测）
 
@@ -15,15 +16,16 @@ jev_decision 直接指派，交付截止 2026-11-28 13:06 UTC）。
 - 复跑命令（与 CI 步骤一致）：`bash scripts/run-all.sh`
   （npm ci → lint → typecheck → `npx jest --ci` → build）
 - 完整实跑日志：`evidence/run-all.log`（一键复跑全绿），
-  变异自证日志：`evidence/mutation-check-20261125-fix.log`（两处变异均变红，还原后全绿，
-  带硬门禁与原始源码校验；旧日志 `evidence/mutation-check.log` 为 24 项版历史）
+  变异自证日志：`evidence/mutation-check-20261125-fix2.log`（两处变异均变红，还原后全绿，
+  带硬门禁与原始源码校验；旧日志 `evidence/mutation-check-20261125-fix.log` 为 32 项版历史，
+  `evidence/mutation-check.log` 为 24 项版历史）
 
 ## 实跑输出（原文，见 evidence/run-all.log）
 
 ```
 Test Suites: 3 passed, 3 total
-Tests:       32 passed, 32 total
-Time:        10.228 s, estimated 16 s
+Tests:       33 passed, 33 total
+Time:        16.976 s, estimated 19 s
 == 全部通过 ==
 ```
 
@@ -42,6 +44,7 @@ Time:        10.228 s, estimated 16 s
 | POST 遇 5xx 不重试 | `AC1 POST 遇 5xx 不重试` | 通过 |
 | POST 遇网络错误不重试 | `AC1 POST 遇网络错误不重试` | 通过 |
 | HTTP 200 + 业务 code 500 不重试 | `AC1 HTTP 200 + 业务 code 500 不重试（业务码不参与重试决策）` | 通过 |
+| HTTP 200 + 业务 code NETWORK 不重试 | `AC1 HTTP 200 + 业务 code NETWORK 不重试（业务码不参与重试决策）` | 通过 |
 | HTTP 503 + 业务 code 0 仍重试 2 次 | `AC1 HTTP 503 + 业务 code 0 仍重试 2 次` | 通过 |
 | HTTP 503 + 业务 code 为字符串仍重试 2 次 | `AC1 HTTP 503 + 业务 code 为字符串仍重试 2 次` | 通过 |
 | PUT 遇 5xx 不重试 | `AC1 PUT 遇 5xx 不重试` | 通过 |
@@ -56,10 +59,12 @@ Time:        10.228 s, estimated 16 s
   `expect(calls.relaunchCalls).toEqual([{ url: '/pages/index/index' }])`。
 - GET 5xx 重试：`expect(calls.requests).toHaveLength(3)`，`expect(delays).toEqual([500, 1500])`。
 - POST 不重试：`expect(calls.requests).toHaveLength(1)`，`expect(delays).toEqual([])`。
-- 重试决策只看 HTTP 状态码（`ApiError.statusCode`），业务 code 不参与：
+- 重试决策只看 HTTP 状态码（`ApiError.statusCode`）与无 statusCode 的网络错误，业务 code 不参与：
   HTTP 200 + 业务 code 500 时 `expect(calls.requests).toHaveLength(1)`（不重试）；
+  HTTP 200 + 业务 code `'NETWORK'` 时 `expect(calls.requests).toHaveLength(1)`、`expect(delays).toEqual([])`（不重试，
+  该测试在旧实现下真实失败过：旧判断把业务码 `'NETWORK'` 当网络错误重试，行为队列耗尽后抛错）；
   HTTP 503 + 业务 code 0 时 `expect(calls.requests).toHaveLength(3)`、`expect(delays).toEqual([500, 1500])`（重试 2 次）；
-  HTTP 503 + 业务 code 为字符串 `'ERR_GATEWAY'` 时 `expect(calls.requests).toHaveLength(2)`、`expect(delays).toEqual([500])`。
+  HTTP 503 + 业务 code 为字符串 `'ERR_GATEWAY'` 时 `expect(calls.requests).toHaveLength(3)`、`expect(delays).toEqual([500, 1500])`（重试 2 次）。
 - PUT / DELETE 不重试：四项均 `expect(calls.requests).toHaveLength(1)`，`expect(delays).toEqual([])`。
 
 ### AC2 · 模拟超时的测试用例抛出的错误 code 为 TIMEOUT
@@ -110,19 +115,21 @@ expect(header['X-Request-Id']).not.toBe('caller-id');
 
 ## 变异自证（门禁会红）
 
-`bash scripts/mutation-check.sh`，原文见 `evidence/mutation-check-20261125-fix.log`：
+`bash scripts/mutation-check.sh`，原文见 `evidence/mutation-check-20261125-fix2.log`
+（本轮日志由仓内脚本的临时副本跑出，仅日志路径改为 fix2、其余内容与仓内脚本一致，
+跑完临时副本已删；仓内脚本未改，旧日志未动）：
 
 ```
-原始 services/request.ts SHA256：f11f56cb04b72a97b605c9294fc253ae7b1d25121892630d2c864c1a8c65c869
+原始 services/request.ts SHA256：404f66ce0c0dfac8658245539eb9217373e4708ff0b6c5a74fc119848f3b0400
 == 变异 A：MAX_RETRIES 2 → 1（GET 5xx 重试次数改少） ==
-Tests:       3 failed, 29 passed, 32 total
+Tests:       4 failed, 29 passed, 33 total
 变异 A：MAX_RETRIES 2 → 1（GET 5xx 重试次数改少） 退出码：1
 == 变异 B：401 重放去掉（第一次 401 后直接清登录态） ==
-Tests:       2 failed, 30 passed, 32 total
+Tests:       2 failed, 31 passed, 33 total
 变异 B：401 重放去掉（第一次 401 后直接清登录态） 退出码：1
 原始源码校验通过：services/request.ts SHA256 与脚本开始时一致
 == 还原后全套测试（必须绿）==
-Tests:       32 passed, 32 total
+Tests:       33 passed, 33 total
 还原后退出码：0
 原始源码校验通过：services/request.ts SHA256 与脚本开始时一致
 == 变异自证通过：两处变异均变红，还原后全绿，原始源码未被修改 ==
@@ -137,12 +144,14 @@ Tests:       32 passed, 32 total
 变红的测试与变异一一对应（日志原文）：
 - 变异 A 变红：`AC1 GET 遇 5xx 重试 2 次（共 3 次请求，退避 500ms、1500ms）`、
   `AC1 GET 遇网络错误重试 2 次后成功`、
-  `AC1 HTTP 503 + 业务 code 0 仍重试 2 次`（字符串业务码那项只需重试 1 次，
-  MAX_RETRIES=1 时仍能通过，不在变红之列，符合预期）。
+  `AC1 HTTP 503 + 业务 code 0 仍重试 2 次`、
+  `AC1 HTTP 503 + 业务 code 为字符串仍重试 2 次`（本轮把该测试补足两次重试后，
+  MAX_RETRIES=1 时它也变红；上一轮它只需重试 1 次，MAX_RETRIES=1 时仍能通过，
+  不在变红之列）。
 - 变异 B 变红：`AC1 401 重放一次：第一次 401 → relogin → 重放成功`、
   `AC1 401 第二次仍 401：清登录态并回首页`。
 
-变异只在 /tmp 副本上做，原仓库文件不动；还原后全套 32 项全绿。
+变异只在 /tmp 副本上做，原仓库文件不动；还原后全套 33 项全绿。
 
 ## 其他测试（附加）
 

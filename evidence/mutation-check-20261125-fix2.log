@@ -1,0 +1,137 @@
+原始 services/request.ts SHA256：404f66ce0c0dfac8658245539eb9217373e4708ff0b6c5a74fc119848f3b0400
+19:export const MAX_RETRIES = 1;
+== 变异 A：MAX_RETRIES 2 → 1（GET 5xx 重试次数改少） ==
+PASS __tests__/error-codes.test.ts (17.018 s)
+PASS __tests__/upload.test.ts (20.003 s)
+FAIL __tests__/request.test.ts (20.43 s)
+  ● request() › AC1 GET 遇 5xx 重试 2 次（共 3 次请求，退避 500ms、1500ms）
+
+    ApiError: 网关异常
+
+      172 |         throw new ApiError(code, message, requestId, statusCode);
+      173 |       }
+    > 174 |       throw new ApiError(statusCode, message, requestId, statusCode);
+          |             ^
+      175 |     } catch (err) {
+      176 |       if (!(err instanceof ApiError)) {
+      177 |         throw err;
+
+      at request (services/request.ts:174:13)
+      at Object.<anonymous> (__tests__/request.test.ts:99:20)
+
+  ● request() › AC1 GET 遇网络错误重试 2 次后成功
+
+    ApiError: 网络断开，请检查网络后重试。
+
+      141 |           reject(new ApiError('TIMEOUT', getErrorMessage('TIMEOUT'), requestId));
+      142 |         } else {
+    > 143 |           reject(new ApiError('NETWORK', getErrorMessage('NETWORK'), requestId));
+          |                  ^
+      144 |         }
+      145 |       },
+      146 |     });
+
+      at Object.fail (services/request.ts:143:18)
+      at Object.request (__tests__/wx-mock.ts:63:20)
+      at services/request.ts:127:8
+      at wxRequestOnce (services/request.ts:126:10)
+      at request (services/request.ts:159:42)
+      at Object.<anonymous> (__tests__/request.test.ts:109:20)
+
+  ● request() › AC1 HTTP 503 + 业务 code 0 仍重试 2 次
+
+    ApiError: ok
+
+      172 |         throw new ApiError(code, message, requestId, statusCode);
+      173 |       }
+    > 174 |       throw new ApiError(statusCode, message, requestId, statusCode);
+          |             ^
+      175 |     } catch (err) {
+      176 |       if (!(err instanceof ApiError)) {
+      177 |         throw err;
+
+      at request (services/request.ts:174:13)
+      at Object.<anonymous> (__tests__/request.test.ts:182:20)
+
+  ● request() › AC1 HTTP 503 + 业务 code 为字符串仍重试 2 次
+
+    ApiError: 网关异常
+
+      172 |         throw new ApiError(code, message, requestId, statusCode);
+      173 |       }
+    > 174 |       throw new ApiError(statusCode, message, requestId, statusCode);
+          |             ^
+      175 |     } catch (err) {
+      176 |       if (!(err instanceof ApiError)) {
+      177 |         throw err;
+
+      at request (services/request.ts:174:13)
+      at Object.<anonymous> (__tests__/request.test.ts:192:20)
+
+Test Suites: 1 failed, 2 passed, 3 total
+Tests:       4 failed, 29 passed, 33 total
+Snapshots:   0 total
+Time:        22.945 s
+Ran all test suites.
+变异 A：MAX_RETRIES 2 → 1（GET 5xx 重试次数改少） 退出码：1
+
+182:        if (false) { // 变异：401 不重放
+== 变异 B：401 重放去掉（第一次 401 后直接清登录态） ==
+PASS __tests__/error-codes.test.ts (16.204 s)
+PASS __tests__/upload.test.ts (18.823 s)
+FAIL __tests__/request.test.ts (18.812 s)
+  ● request() › AC1 401 重放一次：第一次 401 → relogin → 重放成功
+
+    ApiError: 登录已过期
+
+      163 |
+      164 |       if (statusCode === 401) {
+    > 165 |         throw new ApiError(401, message, requestId, 401);
+          |               ^
+      166 |       }
+      167 |       if (statusCode >= 200 && statusCode < 300 && code === 0) {
+      168 |         return body ? (body.data as T) : (undefined as unknown as T);
+
+      at request (services/request.ts:165:15)
+      at Object.<anonymous> (__tests__/request.test.ts:74:20)
+
+  ● request() › AC1 401 第二次仍 401：清登录态并回首页
+
+    expect(jest.fn()).toHaveBeenCalledTimes(expected)
+
+    Expected number of calls: 1
+    Received number of calls: 0
+
+      86 |     enqueueRequest({ type: 'success', statusCode: 401, data: { code: 401, message: '登录已过期', data: null } });
+      87 |     await expect(request({ url: '/spaces' })).rejects.toMatchObject({ code: 401 });
+    > 88 |     expect(reloginSpy).toHaveBeenCalledTimes(1);
+         |                        ^
+      89 |     expect(clearSpy).toHaveBeenCalledTimes(1);
+      90 |     expect(goHomeSpy).toHaveBeenCalledTimes(1);
+      91 |     expect(auth.getToken()).toBeNull();
+
+      at Object.<anonymous> (__tests__/request.test.ts:88:24)
+
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure that .unref() was called on them.
+Test Suites: 1 failed, 2 passed, 3 total
+Tests:       2 failed, 31 passed, 33 total
+Snapshots:   0 total
+Time:        21.327 s
+Ran all test suites.
+变异 B：401 重放去掉（第一次 401 后直接清登录态） 退出码：1
+
+原始源码校验通过：services/request.ts SHA256 与脚本开始时一致
+== 还原后全套测试（必须绿）==
+PASS __tests__/error-codes.test.ts (11.512 s)
+PASS __tests__/upload.test.ts (12.645 s)
+PASS __tests__/request.test.ts (12.578 s)
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure that .unref() was called on them.
+
+Test Suites: 3 passed, 3 total
+Tests:       33 passed, 33 total
+Snapshots:   0 total
+Time:        14.997 s, estimated 15 s
+Ran all test suites.
+还原后退出码：0
+原始源码校验通过：services/request.ts SHA256 与脚本开始时一致
+== 变异自证通过：两处变异均变红，还原后全绿，原始源码未被修改 ==

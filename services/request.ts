@@ -89,10 +89,12 @@ function isTimeoutError(errMsg: string): boolean {
  * - fail 回调的网络错误（code='NETWORK'，无 statusCode）：可重试；
  * - HTTP 5xx（statusCode 500–599）：可重试；
  * - HTTP 200 配业务码 500：statusCode=200，不重试；
+ * - HTTP 200 配业务码 'NETWORK'：statusCode=200 已定义，不重试
+ *   （业务码字符串与网络错误同名时不误判）；
  * - 超时（code='TIMEOUT'，无 statusCode）：不重试。
  */
 function isRetryable(err: ApiError): boolean {
-  if (err.code === 'NETWORK') {
+  if (err.statusCode === undefined && err.code === 'NETWORK') {
     return true;
   }
   return typeof err.statusCode === 'number' && err.statusCode >= 500 && err.statusCode < 600;

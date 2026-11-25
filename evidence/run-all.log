@@ -3,7 +3,7 @@ npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memo
 npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 npm warn deprecated eslint@9.18.0: This version is no longer supported. Please see https://eslint.org/version-support for other options.
 
-added 369 packages in 8s
+added 369 packages in 9s
 
 61 packages are looking for funding
   run `npm fund` for details
@@ -22,14 +22,15 @@ added 369 packages in 8s
 > clawhunt-2080-miniprogram-request@1.0.0 test
 > jest --ci
 
-PASS __tests__/upload.test.ts (7.332 s)
-PASS __tests__/error-codes.test.ts (8.218 s)
-PASS __tests__/request.test.ts (8.491 s)
+PASS __tests__/error-codes.test.ts (13.628 s)
+PASS __tests__/request.test.ts (14.092 s)
+PASS __tests__/upload.test.ts (14.687 s)
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure that .unref() was called on them.
 
 Test Suites: 3 passed, 3 total
-Tests:       32 passed, 32 total
+Tests:       33 passed, 33 total
 Snapshots:   0 total
-Time:        10.228 s, estimated 16 s
+Time:        16.976 s, estimated 19 s
 Ran all test suites.
 == build ==
 
