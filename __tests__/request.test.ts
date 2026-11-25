@@ -153,6 +153,72 @@ describe('request()', () => {
     expect(h1['X-Request-Id']).not.toBe(h2['X-Request-Id']);
   });
 
+  test('AC4 调用方传入 X-Request-Id 会被自动生成的 UUID 覆盖', async () => {
+    enqueueRequest({ type: 'success', statusCode: 200, data: { code: 0, message: 'ok', data: 1 } });
+    await request({ url: '/a', header: { 'X-Request-Id': 'caller-id' } });
+    const header = calls.requests[0].header || {};
+    expect(header['X-Request-Id']).toMatch(UUID_V4_RE);
+    expect(header['X-Request-Id']).not.toBe('caller-id');
+  });
+
+  test('AC1 HTTP 200 + 业务 code 500 不重试（业务码不参与重试决策）', async () => {
+    enqueueRequest({ type: 'success', statusCode: 200, data: { code: 500, message: '服务器开小差了', data: null } });
+    await expect(request({ url: '/spaces', method: 'GET' })).rejects.toMatchObject({ code: 500 });
+    expect(calls.requests).toHaveLength(1);
+    expect(delays).toEqual([]);
+  });
+
+  test('AC1 HTTP 503 + 业务 code 0 仍重试 2 次', async () => {
+    enqueueRequest({ type: 'success', statusCode: 503, data: { code: 0, message: 'ok', data: null } });
+    enqueueRequest({ type: 'success', statusCode: 503, data: { code: 0, message: 'ok', data: null } });
+    enqueueRequest({ type: 'success', statusCode: 200, data: { code: 0, message: 'ok', data: { n: 1 } } });
+    const result = await request<{ n: number }>({ url: '/spaces', method: 'GET' });
+    expect(result).toEqual({ n: 1 });
+    expect(calls.requests).toHaveLength(3);
+    expect(delays).toEqual([500, 1500]);
+  });
+
+  test('AC1 HTTP 503 + 业务 code 为字符串仍重试 2 次', async () => {
+    enqueueRequest({ type: 'success', statusCode: 503, data: { code: 'ERR_GATEWAY', message: '网关异常', data: null } });
+    enqueueRequest({ type: 'success', statusCode: 200, data: { code: 0, message: 'ok', data: { n: 1 } } });
+    const result = await request<{ n: number }>({ url: '/spaces', method: 'GET' });
+    expect(result).toEqual({ n: 1 });
+    expect(calls.requests).toHaveLength(2);
+    expect(delays).toEqual([500]);
+  });
+
+  test('AC1 PUT 遇 5xx 不重试', async () => {
+    enqueueRequest({ type: 'success', statusCode: 500, data: { code: 500, message: '服务器开小差了', data: null } });
+    await expect(
+      request({ url: '/spaces', method: 'PUT', data: { name: '演示空间' } }),
+    ).rejects.toMatchObject({ code: 500 });
+    expect(calls.requests).toHaveLength(1);
+    expect(delays).toEqual([]);
+  });
+
+  test('AC1 PUT 遇网络错误不重试', async () => {
+    enqueueRequest({ type: 'fail', errMsg: 'request:fail' });
+    await expect(
+      request({ url: '/spaces', method: 'PUT', data: { name: '演示空间' } }),
+    ).rejects.toMatchObject({ code: 'NETWORK' });
+    expect(calls.requests).toHaveLength(1);
+    expect(delays).toEqual([]);
+  });
+
+  test('AC1 DELETE 遇 5xx 不重试', async () => {
+    enqueueRequest({ type: 'success', statusCode: 502, data: { code: 502, message: '网关异常', data: null } });
+    await expect(request({ url: '/spaces/42', method: 'DELETE' })).rejects.toMatchObject({ code: 502 });
+    expect(calls.requests).toHaveLength(1);
+    expect(delays).toEqual([]);
+  });
+
+  test('AC1 DELETE 遇网络错误不重试', async () => {
+    enqueueRequest({ type: 'fail', errMsg: 'request:fail' });
+    await expect(request({ url: '/spaces/42', method: 'DELETE' })).rejects.toMatchObject({ code: 'NETWORK' });
+    expect(calls.requests).toHaveLength(1);
+    expect(delays).toEqual([]);
+  });
+
   test('未登录时不附加 Authorization，但仍有 X-Request-Id', async () => {
     auth.setToken(null);
     enqueueRequest({ type: 'success', statusCode: 200, data: { code: 0, message: 'ok', data: 1 } });

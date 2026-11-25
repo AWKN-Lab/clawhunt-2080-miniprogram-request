@@ -5,7 +5,8 @@ jev_decision 直接指派，交付截止 2026-11-28 13:06 UTC）。
 交付仓：`AWKN-Lab/clawhunt-2080-miniprogram-request`（公开仓，main）。
 
 > 截图本身不算证据：每项验收同时给出测试名、复跑命令与实跑输出。
-> 完整原始日志见 `evidence/run-all.log` 与 `evidence/mutation-check.log`（未经改写）。
+> 完整原始日志见 `evidence/run-all.log` 与 `evidence/mutation-check-20261125-fix.log`（未经改写）；
+> 旧变异日志 `evidence/mutation-check.log`（24 项版）保留为历史，不动。
 
 ## 环境与版本（实测）
 
@@ -14,14 +15,15 @@ jev_decision 直接指派，交付截止 2026-11-28 13:06 UTC）。
 - 复跑命令（与 CI 步骤一致）：`bash scripts/run-all.sh`
   （npm ci → lint → typecheck → `npx jest --ci` → build）
 - 完整实跑日志：`evidence/run-all.log`（一键复跑全绿），
-  变异自证日志：`evidence/mutation-check.log`（两处变异均变红，还原后全绿）
+  变异自证日志：`evidence/mutation-check-20261125-fix.log`（两处变异均变红，还原后全绿，
+  带硬门禁与原始源码校验；旧日志 `evidence/mutation-check.log` 为 24 项版历史）
 
 ## 实跑输出（原文，见 evidence/run-all.log）
 
 ```
 Test Suites: 3 passed, 3 total
-Tests:       24 passed, 24 total
-Time:        10.111 s, estimated 11 s
+Tests:       32 passed, 32 total
+Time:        10.228 s, estimated 16 s
 == 全部通过 ==
 ```
 
@@ -39,6 +41,13 @@ Time:        10.111 s, estimated 11 s
 | GET 遇网络错误重试 2 次 | `AC1 GET 遇网络错误重试 2 次后成功` | 通过 |
 | POST 遇 5xx 不重试 | `AC1 POST 遇 5xx 不重试` | 通过 |
 | POST 遇网络错误不重试 | `AC1 POST 遇网络错误不重试` | 通过 |
+| HTTP 200 + 业务 code 500 不重试 | `AC1 HTTP 200 + 业务 code 500 不重试（业务码不参与重试决策）` | 通过 |
+| HTTP 503 + 业务 code 0 仍重试 2 次 | `AC1 HTTP 503 + 业务 code 0 仍重试 2 次` | 通过 |
+| HTTP 503 + 业务 code 为字符串仍重试 2 次 | `AC1 HTTP 503 + 业务 code 为字符串仍重试 2 次` | 通过 |
+| PUT 遇 5xx 不重试 | `AC1 PUT 遇 5xx 不重试` | 通过 |
+| PUT 遇网络错误不重试 | `AC1 PUT 遇网络错误不重试` | 通过 |
+| DELETE 遇 5xx 不重试 | `AC1 DELETE 遇 5xx 不重试` | 通过 |
+| DELETE 遇网络错误不重试 | `AC1 DELETE 遇网络错误不重试` | 通过 |
 
 关键断言原文（测试代码，`__tests__/request.test.ts`）：
 - 401 重放：`expect(reloginSpy).toHaveBeenCalledTimes(1)`，`expect(calls.requests).toHaveLength(2)`。
@@ -47,6 +56,11 @@ Time:        10.111 s, estimated 11 s
   `expect(calls.relaunchCalls).toEqual([{ url: '/pages/index/index' }])`。
 - GET 5xx 重试：`expect(calls.requests).toHaveLength(3)`，`expect(delays).toEqual([500, 1500])`。
 - POST 不重试：`expect(calls.requests).toHaveLength(1)`，`expect(delays).toEqual([])`。
+- 重试决策只看 HTTP 状态码（`ApiError.statusCode`），业务 code 不参与：
+  HTTP 200 + 业务 code 500 时 `expect(calls.requests).toHaveLength(1)`（不重试）；
+  HTTP 503 + 业务 code 0 时 `expect(calls.requests).toHaveLength(3)`、`expect(delays).toEqual([500, 1500])`（重试 2 次）；
+  HTTP 503 + 业务 code 为字符串 `'ERR_GATEWAY'` 时 `expect(calls.requests).toHaveLength(2)`、`expect(delays).toEqual([500])`。
+- PUT / DELETE 不重试：四项均 `expect(calls.requests).toHaveLength(1)`，`expect(delays).toEqual([])`。
 
 ### AC2 · 模拟超时的测试用例抛出的错误 code 为 TIMEOUT
 
@@ -85,29 +99,50 @@ expect(h1['X-Request-Id']).not.toBe(h2['X-Request-Id']);
 `upload` 同样断言（`__tests__/upload.test.ts`）：`Authorization` 与 `X-Request-Id`
 同时存在，`X-Request-Id` 符合 UUID v4 格式。
 
+调用方传入同名 `X-Request-Id` 会被自动生成的 UUID 覆盖（`services/request.ts`：
+调用方 header 先展开，自动生成的 `X-Request-Id` 最后写入）：
+测试名：`AC4 调用方传入 X-Request-Id 会被自动生成的 UUID 覆盖`。
+
+```
+expect(header['X-Request-Id']).toMatch(UUID_V4_RE);
+expect(header['X-Request-Id']).not.toBe('caller-id');
+```
+
 ## 变异自证（门禁会红）
 
-`bash scripts/mutation-check.sh`，原文见 `evidence/mutation-check.log`：
+`bash scripts/mutation-check.sh`，原文见 `evidence/mutation-check-20261125-fix.log`：
 
 ```
+原始 services/request.ts SHA256：f11f56cb04b72a97b605c9294fc253ae7b1d25121892630d2c864c1a8c65c869
 == 变异 A：MAX_RETRIES 2 → 1（GET 5xx 重试次数改少） ==
-Tests:       2 failed, 22 passed, 24 total
+Tests:       3 failed, 29 passed, 32 total
 变异 A：MAX_RETRIES 2 → 1（GET 5xx 重试次数改少） 退出码：1
 == 变异 B：401 重放去掉（第一次 401 后直接清登录态） ==
-Tests:       2 failed, 22 passed, 24 total
+Tests:       2 failed, 30 passed, 32 total
 变异 B：401 重放去掉（第一次 401 后直接清登录态） 退出码：1
+原始源码校验通过：services/request.ts SHA256 与脚本开始时一致
 == 还原后全套测试（必须绿）==
-Tests:       24 passed, 24 total
+Tests:       32 passed, 32 total
 还原后退出码：0
+原始源码校验通过：services/request.ts SHA256 与脚本开始时一致
+== 变异自证通过：两处变异均变红，还原后全绿，原始源码未被修改 ==
 ```
+
+硬门禁（GPT 复核 P1-3 整改后）：变异 A、B 任一退出 0，脚本立即以退出 1 失败，
+不再只记录退出码；还原后测试必须退出 0；原始源码 `services/request.ts`
+在变异前后各校验一次 SHA256，不一致即失败。反向验证过：把变异 A 改成
+空操作（MAX_RETRIES 2 → 2）后脚本以退出 1 失败并打印
+“变异 A 未变红（退出 0），测试未捕获该变异”，假通过口子已堵死。
 
 变红的测试与变异一一对应（日志原文）：
 - 变异 A 变红：`AC1 GET 遇 5xx 重试 2 次（共 3 次请求，退避 500ms、1500ms）`、
-  `AC1 GET 遇网络错误重试 2 次后成功`。
+  `AC1 GET 遇网络错误重试 2 次后成功`、
+  `AC1 HTTP 503 + 业务 code 0 仍重试 2 次`（字符串业务码那项只需重试 1 次，
+  MAX_RETRIES=1 时仍能通过，不在变红之列，符合预期）。
 - 变异 B 变红：`AC1 401 重放一次：第一次 401 → relogin → 重放成功`、
   `AC1 401 第二次仍 401：清登录态并回首页`。
 
-变异只在 /tmp 副本上做，原仓库文件不动；还原后全套 24 项全绿。
+变异只在 /tmp 副本上做，原仓库文件不动；还原后全套 32 项全绿。
 
 ## 其他测试（附加）
 
