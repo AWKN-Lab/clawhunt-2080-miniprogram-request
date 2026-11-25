@@ -21,7 +21,7 @@
 npm ci
 npm run lint # eslint
 npm run typecheck # tsc --noEmit
-npm test # jest（32 项）
+npm test # jest（33 项）
 npm run build # tsc，产物在 dist/
 bash scripts/run-all.sh # 一键复跑：npm ci → lint → typecheck → test → build
 ```
